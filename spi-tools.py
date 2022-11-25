@@ -40,20 +40,47 @@ class Winbond25Q64(Handler):
         high = 0
         mid = 0
         with open(outputfile, "ab") as outfile:
-            _data = self.slave.exchange([0x03, 0x00, 0x00, 0x00], chunk_size)
             while True:
                 if high == 0x80:
                     if mid == 0x00:
                         print("Done!")
                         return
+                _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
+                outfile.write(bytes(_data))
                 if mid == 0xff: 
                     high += 1
                     mid = 0
                 else:
                     mid += 1
+
+
+class Winbond25Q128(Handler):
+    SIZE = 0x1000000
+    
+    def __init__(self, ftdi_device: str = 'ftdi://:/1'):
+        super().__init__(ftdi_device)
+    
+    def dump_full(self, outputfile: str = "mem.out"):
+        chunk_size = 256
+        high = 0
+        mid = 0
+        with open(outputfile, "ab") as outfile:
+            while True:
+                if high == 0xff:
+                    if mid == 0xff:
+                        _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
+                        outfile.write(bytes(_data))
+                        print("Done!")
+                        return
                 _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
                 outfile.write(bytes(_data))
+                if mid == 0xff: 
+                    high += 1
+                    mid = 0
+                else:
+                    mid += 1
                 
+
 
 
 if __name__ == "__main__":
@@ -67,7 +94,7 @@ if __name__ == "__main__":
     mode_parser.add_argument("mode", choices=['dump_head', 'dump_full_content','read_from', "write_to"], help="Select the desired operation")
     args = parser.parse_args()
 
-    spi = Winbond25Q64(ftdi_device=args.ftdi_device)
+    spi = Winbond25Q128(ftdi_device=args.ftdi_device)
 
     if args.mode == "dump_head":
         spi.dump_head()
