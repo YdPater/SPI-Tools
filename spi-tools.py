@@ -86,6 +86,7 @@ class Winbond25Q128(Handler):
 if __name__ == "__main__":
     parser = ArgumentParser(description="SPI toolkit")
     parser.add_argument("--ftdi-device", help="Specify FTDI device.", default="ftdi://:/1")
+    parser.add_argument("--spi-device", choices=["winbond_25q64", "winbond_25q128"], help="Specify SPI flash device to dump",required=True)
     parser.add_argument("-o", "--output", help="Output file", default="mem.out", type=str)
     parser.add_argument("-a", "--address", help="Read from or write to this address", type=int)
     subparsers = parser.add_subparsers(dest="Mode command")
@@ -94,7 +95,12 @@ if __name__ == "__main__":
     mode_parser.add_argument("mode", choices=['dump_head', 'dump_full_content','read_from', "write_to"], help="Select the desired operation")
     args = parser.parse_args()
 
-    spi = Winbond25Q128(ftdi_device=args.ftdi_device)
+    if args.spi_device == "winbond_25q64":
+        spi = Winbond25Q64(ftdi_device=args.ftdi_device)
+    elif args.spi_device == "winbond_25q128":
+        spi = Winbond25Q128(ftdi_device=args.ftdi_device)
+    else:
+        print("[!] Unsupported device.")
 
     if args.mode == "dump_head":
         spi.dump_head()
