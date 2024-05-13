@@ -14,7 +14,6 @@ def int_to_three_bytes(num):
     return byte1, byte2, byte3
 
 
-
 class Handler():
     def __init__(self, ftdi_device: str = 'ftdi://:/1'):
         _spi = SpiController()
@@ -71,7 +70,7 @@ class Winbond25QXX(Handler):
                 else:
                     _data = self.slave.exchange([0x03, msb, mmb, lsb], 255)
                     outfile.write(bytes(_data))
-                    start += 256
+                    start += 255
 
 
 class Winbond25Q64(Winbond25QXX):
@@ -85,29 +84,10 @@ class Winbond25Q64(Winbond25QXX):
 class Winbond25Q128(Handler):
     SIZE = 0x1000000
     
-    def __init__(self, ftdi_device: str = 'ftdi://:/1'):
+    def __init__(self, ftdi_device: str = 'ftdi://:/1', size=SIZE):
         super().__init__(ftdi_device)
+        self.size = size
     
-    def dump_full(self, outputfile: str = "mem.out"):
-        chunk_size = 256
-        high = 0
-        mid = 0
-        with open(outputfile, "ab") as outfile:
-            while True:
-                if high == 0xff:
-                    if mid == 0xff:
-                        _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
-                        outfile.write(bytes(_data))
-                        print("Done!")
-                        return
-                _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
-                outfile.write(bytes(_data))
-                if mid == 0xff: 
-                    high += 1
-                    mid = 0
-                else:
-                    mid += 1
-
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="SPI toolkit")
