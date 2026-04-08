@@ -7,19 +7,19 @@ from time import sleep
 COMMAND_CHECK_BUSY = [0x05]
 COMMAND_WRITE_ENABLE = [0x06]
 COMMAND_WRITE_DISABLE = [0x04]
-COMMAND_CHIP_ERASE = [0xc7]
+COMMAND_CHIP_ERASE = [0xC7]
 
 
-class Handler():
-    def __init__(self, ftdi_device: str = 'ftdi://:/1'):
+class Handler:
+    def __init__(self, ftdi_device: str = "ftdi://:/1"):
         _spi = SpiController()
         _spi.configure(ftdi_device)
-        self.slave = _spi.get_port(cs=0, freq=12E6, mode=0)
+        self.slave = _spi.get_port(cs=0, freq=1e6, mode=0)
 
-    def read_from(self, addr1, addr2, addr3):
-        _data = self.slave.exchange([0x03, addr1, addr2, addr3], 1)
+    def read_from(self, addr1, addr2, addr3, length=1):
+        _data = self.slave.exchange([0x03, addr1, addr2, addr3], length)
         print(_data)
-    
+
     def dump_head(self):
         print()
         _data = self.slave.exchange([0x03, 0x00, 0x00, 0x00], 100)
@@ -29,7 +29,7 @@ class Handler():
         for d in _data:
             if counter == 0:
                 print(f"{_addr:#0{6}x}| ", end="")
-            if counter < amount_per_row -1:
+            if counter < amount_per_row - 1:
                 print(f"{d:#0{4}x}", end=" ")
                 counter += 1
                 _addr += 1
@@ -43,7 +43,6 @@ class Handler():
         if self.slave.exchange(COMMAND_CHECK_BUSY, 1) == 3:
             print("Chip is busy!")
             exit()
-        
 
     def write_page(self, addr1, addr2, addr3, data):
         self.check_busy_state()
@@ -53,7 +52,7 @@ class Handler():
         dataarr = [0x02, addr1, addr2, addr3]
         for b in data:
             dataarr.append(b)
-        self.slave.exchange(dataarr, 0) 
+        self.slave.exchange(dataarr, 0)
         self.slave.exchange(COMMAND_WRITE_DISABLE, 0)
 
     def chip_erase(self):
@@ -65,10 +64,10 @@ class Handler():
 
 class Winbond25Q64(Handler):
     SIZE = 0x800000
-    
-    def __init__(self, ftdi_device: str = 'ftdi://:/1'):
+
+    def __init__(self, ftdi_device: str = "ftdi://:/1"):
         super().__init__(ftdi_device)
-    
+
     def dump_full(self, outputfile: str = "mem.out"):
         chunk_size = 256
         high = 0
@@ -81,7 +80,7 @@ class Winbond25Q64(Handler):
                         return
                 _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
                 outfile.write(bytes(_data))
-                if mid == 0xff: 
+                if mid == 0xFF:
                     high += 1
                     mid = 0
                 else:
@@ -90,55 +89,90 @@ class Winbond25Q64(Handler):
 
 class Winbond25Q128(Handler):
     SIZE = 0x1000000
-    
-    def __init__(self, ftdi_device: str = 'ftdi://:/1'):
+
+    def __init__(self, ftdi_device: str = "ftdi://:/1"):
         super().__init__(ftdi_device)
-    
+
     def dump_full(self, outputfile: str = "mem.out"):
         chunk_size = 256
         high = 0
         mid = 0
         with open(outputfile, "ab") as outfile:
             while True:
-                if high == 0xff:
-                    if mid == 0xff:
+                if high == 0xFF:
+                    if mid == 0xFF:
                         _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
                         outfile.write(bytes(_data))
                         print("Done!")
                         return
                 _data = self.slave.exchange([0x03, high, mid, 0x00], chunk_size)
                 outfile.write(bytes(_data))
-                if mid == 0xff: 
+                if mid == 0xFF:
                     high += 1
                     mid = 0
                 else:
                     mid += 1
-                
 
-def parse_input_data(file) -> []:
+
+def parse_input_data(file):
     try:
-        f = open(file, 'rb')
-    except FileNotFoundError as fnf:
+        f = open(file, "rb")
+    except FileNotFoundError:
         print("Input file not found.")
         exit()
-    except PermissionError as pe:
+    except PermissionError:
         print("Permission denied on input file.")
         exit()
-    content = f.read() 
+    content = f.read()
     return content
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="SPI toolkit")
-    parser.add_argument("--ftdi-device", help="Specify FTDI device.", default="ftdi://:/1")
-    parser.add_argument("--spi-device", choices=["winbond_25q64", "winbond_25q128"], help="Specify SPI flash device to dump",required=True)
-    parser.add_argument("-o", "--output", help="Output file", default="mem.out", type=str)
-    parser.add_argument("-a", "--address", help="Read from or write to this address", type=int)
-    parser.add_argument("-if", "--input-file", help="In write_page mode, specify the input file.", type=str)
+    parser.add_argument(
+        "--ftdi-device", help="Specify FTDI device.", default="ftdi://:/1"
+    )
+    parser.add_argument(
+        "--spi-device",
+        choices=["winbond_25q64", "winbond_25q128"],
+        help="Specify SPI flash device to dump",
+        required=True,
+    )
+    parser.add_argument(
+        "-o", "--output", help="Output file", default="mem.out", type=str
+    )
+    parser.add_argument(
+        "-if",
+        "--input-file",
+        help="In write_page mode, specify the input file.",
+        type=str,
+    )
+    parser.add_argument(
+        "-s",
+        "--size",
+        help="Specify the amount of bytes to be read. Only works in dump head mode.",
+        type=int,
+    )
+    parser.add_argument(
+        "-a",
+        "--address",
+        help="Specify the start address to read from. Specify the address as CSV, eg: 0,0,0",
+        type=str,
+    )
     subparsers = parser.add_subparsers(dest="Mode command")
     subparsers.required = True
     mode_parser = subparsers.add_parser("mode")
-    mode_parser.add_argument("mode", choices=['dump_head', 'dump_full_content','read_from', "write_page", "chip_erase"], help="Select the desired operation")
+    mode_parser.add_argument(
+        "mode",
+        choices=[
+            "dump_head",
+            "dump_full_content",
+            "read_from",
+            "write_page",
+            "chip_erase",
+        ],
+        help="Select the desired operation",
+    )
     args = parser.parse_args()
 
     if args.spi_device == "winbond_25q64":
@@ -147,10 +181,11 @@ if __name__ == "__main__":
         spi = Winbond25Q128(ftdi_device=args.ftdi_device)
     else:
         print("[!] Unsupported device.")
+        exit()
 
     if args.mode == "dump_head":
         spi.dump_head()
-    
+
     if args.mode == "dump_full_content":
         spi.dump_full()
 
@@ -162,11 +197,18 @@ if __name__ == "__main__":
         spi.write_page(0x00, 0x00, 0x00, data)
 
     if args.mode == "read_from":
-        spi.read_from(0x00, 0x00, 0x01)
-    
-    if args.mode == "chip_erase":
-        print("Are you sure you want to erase the full chip? This cannot be undone (y/n): ", end="")
-        ans = input()
-        if ans == 'y' or ans == "Y":
-            spi.chip_erase()
+        try:
+            low, mid, high = args.address.split(",")
+        except AttributeError:
+            print("No address supplied!")
+            exit()
+        spi.read_from(int(low), int(mid), int(high), args.size)
 
+    if args.mode == "chip_erase":
+        print(
+            "Are you sure you want to erase the full chip? This cannot be undone (y/n): ",
+            end="",
+        )
+        ans = input()
+        if ans == "y" or ans == "Y":
+            spi.chip_erase()
